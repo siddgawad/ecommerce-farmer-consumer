@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+# Cancel older runs on the same branch/PR to save time
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:7
+        ports: [ "27017:27017" ]
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports: [ "6379:6379" ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Optional: if you use a .env for type-checks or unit tests, create a minimal one
+      - name: Create minimal .env
+        run: |
+          cat > .env <<'EOF'
+          NODE_ENV=test
+          PORT=4000
+          # Use local services started above
+          MONGO_URI=mongodb://localhost:27017/ecomm_farm_consumer
+          REDIS_URL=redis://localhost:6379
+          JWT_SECRET=test-secret
+          CORS_ORIGIN=http://localhost:3000
+          COOKIE_NAME=auth_token
+          COOKIE_DOMAIN=localhost
+          # Payments (not used during CI build)
+          STRIPE_SECRET_KEY=sk_test_dummy
+          STRIPE_WEBHOOK_SECRET=whsec_dummy
+          RAZORPAY_KEY_ID=rzp_test_dummy
+          RAZORPAY_KEY_SECRET=dummy
+          EOF
+
+      - name: Type-check & build
+        run: npm run build
+
+      # Placeholder tests (replace with your real tests later)
+      - name: Run tests
+        run: npm test
+
+  # Optional: verify Docker build can succeed (no push)
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: backend-api:ci
