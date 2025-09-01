@@ -4,6 +4,7 @@ An open-source marketplace connecting local farmers with consumers.
 Farmers can showcase and sell their fresh produce directly, while consumers get transparent access to local goods at fair prices.
 
 🚀 Features
+
 👩‍🌾 For Consumers
 
 Browse all products
@@ -38,7 +39,7 @@ Approve/reject listings
 
 Analytics & reporting
 
-Tech Stack
+⚙️ Tech Stack
 
 Frontend: Next.js + TypeScript, TailwindCSS
 
