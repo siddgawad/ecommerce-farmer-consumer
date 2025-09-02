@@ -1,6 +1,5 @@
 import { Router } from "express";
 
-// ESM local imports require .js extensions
 import publicRoutes from "./public.routes.js";
 import userRoutes from "./user.routes.js";
 import farmerRoutes from "./farmer.routes.js";

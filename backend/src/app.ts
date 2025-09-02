@@ -14,6 +14,10 @@ import { notFound, errorHandler } from "./middleware/error.js";
 import { rateLimitMiddleware, limiterGeneral } from "./config/rateLimiter.js";
 import { setStdHeaders } from "./middleware/response.js";
 
+import Order from "./models/Order.js";
+import Product from "./models/Product.js";
+
+
 const app = express();
 
 // Security & infra middleware (safe before JSON parser)
@@ -42,25 +46,37 @@ if (env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET) {
 
   const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
 
-  app.post("/webhooks/stripe", express.raw({ type: "application/json" }), (req, res) => {
-    const sigHeader = req.headers["stripe-signature"];
-    if (typeof sigHeader !== "string") {
-      return res.status(400).send("Missing stripe-signature header");
-    }
+  app.post("/webhooks/stripe", express.raw({ type: "application/json" }), async (req, res) => {
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" });
+    const sig = req.headers["stripe-signature"];
+    if (typeof sig !== "string") return res.status(400).send("Missing stripe-signature header");
 
+    let event: Stripe.Event;
     try {
-      const event = stripe.webhooks.constructEvent(req.body, sigHeader, webhookSecret);
-
-      // Handle only the events you subscribe to in Dashboard
-      if (event.type === "checkout.session.completed") {
-        // const session = event.data.object as Stripe.Checkout.Session;
-        // TODO: mark order paid, decrement inventory, enqueue emails, etc.
-      }
-
-      return res.status(200).send("ok");
+      event = stripe.webhooks.constructEvent(req.body, sig, env.STRIPE_WEBHOOK_SECRET!);
     } catch (err: any) {
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const orderId = session.metadata?.orderId;
+      if (orderId) {
+        const order = await Order.findById(orderId);
+        if (order && order.status !== "paid") {
+          // decrement stock based on snapshots (best-effort; use transactions if you run a replica set)
+          for (const it of order.items) {
+            await Product.updateOne(
+              { _id: it.product, quantity: { $gte: it.quantity } },
+              { $inc: { quantity: -it.quantity } }
+            );
+          }
+          order.status = "paid";
+          await order.save();
+        }
+      }
+    }
+  
+    return res.status(200).send("ok");
   });
 }
 

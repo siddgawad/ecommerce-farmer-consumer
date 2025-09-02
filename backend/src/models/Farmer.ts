@@ -28,7 +28,6 @@ const FarmerSchema = new Schema<IFarmer>(
   { timestamps: true }
 );
 
-FarmerSchema.index({ email: 1 }, { unique: true });
 
 FarmerSchema.plugin(softDeletePlugin);
 

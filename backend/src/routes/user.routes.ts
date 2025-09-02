@@ -1,19 +1,17 @@
 import { Router } from "express";
 import { validate } from "../middleware/validate.js";
-import { auth, requireRoles } from "../middleware/auth.js";
+import { auth } from "../middleware/auth.js";
 import { rateLimitMiddleware, limiterAuth } from "../config/rateLimiter.js";
 
-// Controllers + Zod schemas
 import {
   userSignup,
   userSignin,
   userSignout,
-  ZUserAuthSchema,
+  ZUserSignupSchema,
+  ZUserSigninSchema,
 } from "../controllers/auth.controller.js";
 
 import {
-  listLoggedInProducts,
-  getProductForUser,
   checkout,
   listMyOrders,
   listOrdersByProduct,
@@ -23,23 +21,24 @@ import {
   ZOrderActionSchema,
 } from "../controllers/order.controller.js";
 
+import {
+  listPublicProducts,
+  getPublicProduct,
+} from "../controllers/product.controller.js";
+
 const router = Router();
 
 /** Auth */
-router.post("/signup", rateLimitMiddleware(limiterAuth), validate(ZUserAuthSchema), userSignup);
-router.post("/signin", rateLimitMiddleware(limiterAuth), validate(ZUserAuthSchema), userSignin);
-router.post("/signout", auth(), userSignout);
+router.post("/signup", rateLimitMiddleware(limiterAuth), validate(ZUserSignupSchema), userSignup);
+router.post("/signin", rateLimitMiddleware(limiterAuth), validate(ZUserSigninSchema), userSignin);
+router.post("/signout", userSignout);
 
-/** Browsing (logged-in) */
-router.get("/browse", auth(), requireRoles("user", "admin", "farmer"), listLoggedInProducts);
+/** Browsing — public to keep parity pre/post login */
+router.get("/browse", listPublicProducts);
+router.get("/browse/:productId", getPublicProduct);
 
-// Keep spec path for product detail under user namespace as well
-router.get("/browse/:productId", getProductForUser);
-
-/** Checkout */
+/** Checkout & Orders (auth) */
 router.post("/checkout", auth(), validate(ZCheckoutSchema), checkout);
-
-/** Orders */
 router.get("/my-orders", auth(), listMyOrders);
 router.get("/my-orders/:productId", auth(), listOrdersByProduct);
 router.post("/my-orders/:orderId/return", auth(), validate(ZOrderActionSchema), requestReturn);
